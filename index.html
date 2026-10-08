@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SoundPay Box - Smart Soundbox & Merchant Dashboard</title>
+
+    <!-- Tailwind CSS for UI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- QR Code Generator Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+</head>
+<body class="bg-slate-100 font-sans text-slate-800 pb-10">
+
+    <!-- Header / Brand Navigation -->
+    <header class="bg-indigo-700 text-white p-4 shadow-md flex justify-between items-center select-none">
+        <div class="flex items-center gap-3">
+            <!-- Dynamic Logo Display -->
+            <img id="appLogo" src="https://via.placeholder.com/45/ffffff/4f46e5?text=SP" alt="Logo" class="w-11 h-11 rounded-lg object-cover bg-white p-0.5 border border-indigo-300">
+            <div>
+                <!-- Company Title with 5-Click Secret Trigger -->
+                <h1 id="brandTitle" class="text-xl font-bold tracking-wide cursor-pointer active:scale-95 transition-transform" onclick="handleBrandClick()">
+                    SoundPay Box 🔊
+                </h1>
+                <p class="text-xs text-indigo-200">Instant Payment Voice Alerts</p>
+            </div>
+        </div>
+        <div id="subStatusBadge" class="bg-amber-400 text-slate-900 font-semibold px-3 py-1 rounded-full text-xs shadow">
+            Checking Status...
+        </div>
+    </header>
+
+    <div class="max-w-md mx-auto mt-6 px-4 space-y-6">
+
+        <!-- Background Notification Permission Box -->
+        <div id="notifBanner" class="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-center justify-between">
+            <div>
+                <p class="text-xs font-bold text-amber-800">Enable Background Alerts</p>
+                <p class="text-[11px] text-amber-600">Receive sounds & popups when app is minimized.</p>
+            </div>
+            <button onclick="requestNotificationPermission()" class="bg-amber-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-amber-700">
+                Enable
+            </button>
+        </div>
+
+        <!-- 1. Language & Voice Settings -->
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+            <h2 class="text-md font-semibold text-slate-700 mb-3">🗣️ Soundbox Language Settings</h2>
+            <label class="block text-xs text-slate-500 mb-1">Select Voice Language:</label>
+            <select id="languageSelect" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500">
+                <option value="en-IN">English (India)</option>
+                <option value="bn-IN" selected>Bengali (বাংলা)</option>
+                <option value="hi-IN">Hindi (हिंदी)</option>
+                <option value="ur-PK">Urdu (اردو)</option>
+                <option value="kn-IN">Kannada (ಕನ್ನಡ)</option>
+                <option value="te-IN">Telugu (తెలుగు)</option>
+                <option value="hi-IN">Bihari / Bhojpuri (हिंदी/भोजपुरी)</option>
+            </select>
+            
+            <button onclick="testVoiceAlert()" class="mt-3 w-full bg-slate-800 text-white py-2 rounded-lg text-xs font-semibold hover:bg-slate-900 transition">
+                🔊 Test Voice Alert
+            </button>
+        </div>
+
+        <!-- 2. UPI Details & Dynamic QR Code Setup -->
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+            <h2 class="text-md font-semibold text-slate-700 mb-3">💳 Merchant QR Code Setup</h2>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs text-slate-500 mb-1">Your VPA / UPI ID (e.g. 9876543210@paytm)</label>
+                    <input type="text" id="upiIdInput" placeholder="Enter UPI ID" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-500 mb-1">Shop / Merchant Name</label>
+                    <input type="text" id="merchantNameInput" placeholder="Enter Business Name" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <button onclick="generateQRCode()" class="w-full bg-indigo-600 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-indigo-700 transition">
+                    Generate Scan QR Code
+                </button>
+            </div>
+
+            <!-- Generated QR Code Display -->
+            <div id="qrContainer" class="mt-5 flex flex-col items-center justify-center p-4 bg-slate-50 rounded-lg border border-dashed border-slate-300 hidden">
+                <div id="qrcode"></div>
+                <p id="qrMerchantText" class="mt-2 font-bold text-slate-700 text-sm"></p>
+                <p id="qrUpiText" class="text-xs text-slate-500"></p>
+            </div>
+        </div>
+
+        <!-- 3. Live Payment Alert Log -->
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+            <h2 class="text-md font-semibold text-slate-700 mb-3">⚡ Live Payment Received</h2>
+            <div id="lastPaymentBox" class="p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-center">
+                <p class="text-xs text-emerald-600 font-semibold uppercase">Latest Transaction</p>
+                <p id="paymentAmountText" class="text-3xl font-extrabold text-emerald-700 my-1">₹0.00</p>
+                <p id="paymentTimeText" class="text-xs text-emerald-600">Waiting for payments...</p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- SECRET ADMIN PANEL MODAL -->
+    <div id="adminModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="text-lg font-bold text-slate-800">⚙️ Admin Control Panel</h3>
+                <button onclick="closeAdminModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+            </div>
+
+            <!-- Logo Upload Section -->
+            <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                <label class="block text-xs font-bold text-slate-700">🖼️ Upload Brand Logo (Direct Photo):</label>
+                <input type="file" id="logoFileInput" accept="image/*" class="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                <button onclick="uploadLogoImage()" class="w-full bg-slate-800 text-white py-2 rounded-lg text-xs font-semibold hover:bg-slate-900">Save Logo</button>
+            </div>
+
+            <!-- Subscription Settings -->
+            <div class="space-y-3 pt-2">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Set Subscription Days (1 to 365):</label>
+                    <input type="number" id="subDaysInput" min="1" max="365" value="30" oninput="calculateAdminRate()" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm">
+                </div>
+                
+                <div class="p-3 bg-indigo-50 border border-indigo-100 rounded-lg flex justify-between items-center">
+                    <span class="text-xs text-indigo-700 font-medium">Calculated Charge (₹2/day):</span>
+                    <span id="calculatedPriceText" class="text-lg font-bold text-indigo-800">₹60</span>
+                </div>
+
+                <button onclick="activateSubscription()" class="w-full bg-emerald-600 text-white py-3 rounded-lg font-bold text-sm hover:bg-emerald-700 shadow-md transition">
+                    Activate Plan Now
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        // --- 1. FIREBASE CONFIGURATION ---
+        // নিজের ফায়ারবেস কনফিগারেশন কী দিয়ে প্রতিস্থাপন করুন
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT.firebaseapp.com",
+            databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+            projectId: "YOUR_PROJECT",
+            storageBucket: "YOUR_PROJECT.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // --- 2. SECRET ADMIN CLICK COUNTER ---
+        let brandClickCount = 0;
+        let clickTimer;
+
+        function handleBrandClick() {
+            brandClickCount++;
+            clearTimeout(clickTimer);
+
+            if (brandClickCount === 5) {
+                brandClickCount = 0;
+                promptAdminPassword();
+            } else {
+                clickTimer = setTimeout(() => { brandClickCount = 0; }, 2000);
+            }
+        }
+
+        function promptAdminPassword() {
+            const password = prompt("Enter Admin Password:");
+            if (password === "7876482550000") {
+                document.getElementById('adminModal').classList.remove('hidden');
+            } else if (password !== null) {
+                alert("Incorrect Admin Password!");
+            }
+        }
+
+        function closeAdminModal() {
+            document.getElementById('adminModal').classList.add('hidden');
+        }
+
+        function calculateAdminRate() {
+            const days = parseInt(document.getElementById('subDaysInput').value) || 0;
+            const price = days * 2; // ₹2 per day rate
+            document.getElementById('calculatedPriceText').innerText = `₹${price}`;
+        }
+
+        // --- 3. DIRECT LOGO PHOTO UPLOADER (Base64) ---
+        function uploadLogoImage() {
+            const fileInput = document.getElementById('logoFileInput');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert("Please select an image file first.");
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const base64Image = e.target.result;
+                document.getElementById('appLogo').src = base64Image;
+                localStorage.setItem('app_custom_logo', base64Image);
+                
+                // Sync with Firebase database so it updates across devices
+                database.ref('settings/logo').set(base64Image);
+                alert("Logo updated successfully!");
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // --- 4. DYNAMIC QR CODE GENERATOR ---
+        function generateQRCode() {
+            const upiId = document.getElementById('upiIdInput').value.trim();
+            const name = document.getElementById('merchantNameInput').value.trim() || 'Merchant';
+
+            if (!upiId) {
+                alert("Please enter a valid UPI ID!");
+                return;
+            }
+
+            const upiUrl = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(name)}&cu=INR`;
+            
+            const qrContainer = document.getElementById('qrContainer');
+            const qrcodeDiv = document.getElementById('qrcode');
+            qrcodeDiv.innerHTML = "";
+
+            new QRCode(qrcodeDiv, {
+                text: upiUrl,
+                width: 180,
+                height: 180,
+                colorDark : "#0f172a",
+                colorLight : "#ffffff",
+                correctLevel : QRCode.CorrectLevel.H
+            });
+
+            document.getElementById('qrMerchantText').innerText = name;
+            document.getElementById('qrUpiText').innerText = upiId;
+            qrContainer.classList.remove('hidden');
+
+            localStorage.setItem('saved_upi', upiId);
+            localStorage.setItem('saved_name', name);
+        }
+
+        // --- 5. NOTIFICATION PERMISSION & BACKGROUND ALERTS ---
+        function requestNotificationPermission() {
+            if ("Notification" in window) {
+                Notification.requestPermission().then(permission => {
+                    if (permission === "granted") {
+                        document.getElementById('notifBanner').classList.add('hidden');
+                        new Notification("SoundPay Box Active", {
+                            body: "Background notifications enabled!",
+                            icon: document.getElementById('appLogo').src
+                        });
+                    }
+                });
+            }
+        }
+
+        function triggerBackgroundNotification(amount) {
+            if ("Notification" in window && Notification.permission === "granted") {
+                new Notification("💰 New Payment Received!", {
+                    body: `Amount: ₹${amount} credited successfully.`,
+                    icon: document.getElementById('appLogo').src,
+                    vibrate: [200, 100, 200]
+                });
+            }
+        }
+
+        // --- 6. MULTI-LANGUAGE VOICE SOUNDBOX LOGIC ---
+        function speakPayment(amount) {
+            const lang = document.getElementById('languageSelect').value;
+            let text = "";
+
+            switch (lang) {
+                case 'bn-IN':
+                    text = `পেমেন্ট সফল হয়েছে, ${amount} টাকা পাওয়া গেছে`;
+                    break;
+                case 'hi-IN':
+                    text = `पेमेंट प्राप्त हुआ, ${amount} रुपये मिले`;
+                    break;
+                case 'ur-PK':
+                    text = `ادائیگی موصول ہوئی، ${amount} روپے مل گئے`;
+                    break;
+                case 'kn-IN':
+                    text = `ಪಾವತಿ ಸ್ವೀಕರಿಸಲಾಗಿದೆ, ${amount} ರೂಪಾಯಿಗಳು ಬಂದಿವೆ`;
+                    break;
+                case 'te-IN':
+                    text = `చెల్లింపు పూర్తయింది, ${amount} రూపాయలు వచ్చాయి`;
+                    break;
+                default: // English
+                    text = `Payment received, ${amount} rupees successfully credited`;
+            }
+
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = lang;
+                utterance.rate = 0.9;
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        function testVoiceAlert() {
+            speakPayment(100);
+            triggerBackgroundNotification(100);
+        }
+
+        // --- 7. REALTIME FIREBASE PAYMENT LISTENER ---
+        const paymentRef = database.ref('payments/latest');
+
+        paymentRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data && data.amount) {
+                document.getElementById('paymentAmountText').innerText = `₹${data.amount}`;
+                document.getElementById('paymentTimeText').innerText = `Received at ${new Date().toLocaleTimeString()}`;
+                
+                // Sound + Notification Trigger
+                speakPayment(data.amount);
+                triggerBackgroundNotification(data.amount);
+            }
+        });
+
+        // Firebase Sync for App Logo
+        database.ref('settings/logo').on('value', (snapshot) => {
+            const logoData = snapshot.val();
+            if (logoData) {
+                document.getElementById('appLogo').src = logoData;
+            }
+        });
+
+        // --- 8. SUBSCRIPTION MANAGEMENT ---
+        function activateSubscription() {
+            const days = parseInt(document.getElementById('subDaysInput').value) || 30;
+            const expiryDate = new Date();
+            expiryDate.setDate(expiryDate.getDate() + days);
+
+            localStorage.setItem('sub_expiry', expiryDate.toISOString());
+            updateSubscriptionUI();
+            closeAdminModal();
+            alert(`Subscription activated for ${days} days! Valid till ${expiryDate.toLocaleDateString()}`);
+        }
+
+        function updateSubscriptionUI() {
+            const expiryStr = localStorage.getItem('sub_expiry');
+            const badge = document.getElementById('subStatusBadge');
+
+            if (!expiryStr) {
+                badge.className = "bg-rose-500 text-white font-semibold px-3 py-1 rounded-full text-xs shadow";
+                badge.innerText = "Plan Inactive";
+                return;
+            }
+
+            const expiryDate = new Date(expiryStr);
+            const today = new Date();
+
+            if (expiryDate > today) {
+                const diffTime = Math.abs(expiryDate - today);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+                badge.className = "bg-emerald-400 text-slate-900 font-semibold px-3 py-1 rounded-full text-xs shadow";
+                badge.innerText = `Active (${diffDays} Days Left)`;
+            } else {
+                badge.className = "bg-rose-500 text-white font-semibold px-3 py-1 rounded-full text-xs shadow";
+                badge.innerText = "Plan Expired";
+            }
+        }
+
+        // Restore saved settings on load
+        window.onload = () => {
+            updateSubscriptionUI();
+            
+            const savedLogo = localStorage.getItem('app_custom_logo');
+            if(savedLogo) {
+                document.getElementById('appLogo').src = savedLogo;
+            }
+
+            const savedUpi = localStorage.getItem('saved_upi');
+            const savedName = localStorage.getItem('saved_name');
+            if (savedUpi) {
+                document.getElementById('upiIdInput').value = savedUpi;
+                document.getElementById('merchantNameInput').value = savedName || '';
+                generateQRCode();
+            }
+
+            if ("Notification" in window && Notification.permission === "granted") {
+                document.getElementById('notifBanner').classList.add('hidden');
+            }
+        };
+    </script>
+</body>
+</html>
